@@ -1,127 +1,97 @@
 /**
- * @name AudioRouter
+ * @name AudioRoute
  * @author Charlie
  * @version 1.0.0
- * @description Route audio streams from different users to different outputs.
- * @website https://example.com/AudioRouter
- * @source https://github.com/charlie/AudioRouter
- * @updateUrl https://raw.githubusercontent.com/charlie/AudioRouter/master/AudioRouter.plugin.js
+ * @description Adds a "Route Audio" option to the user context menu in Discord.
  */
 
 module.exports = (_ => {
     const config = {
         info: {
-            name: "AudioRouter",
-            authors: [{
-                name: "Charlie",
-                discord_id: "",
-                github_username: "yourusername",
-            }],
+            name: "AudioRoute",
+            authors: [
+                {
+                    name: "Charlie",
+                    discord_id: "YOUR_DISCORD_ID",
+                    github_username: "YOUR_GITHUB_USERNAME",
+                    twitter_username: "YOUR_TWITTER_USERNAME"
+                }
+            ],
             version: "1.0.0",
-            description: "Route audio streams from different users to different outputs."
+            description: "Adds a 'Route Audio' option to the user context menu in Discord.",
+            github: "https://github.com/YOUR_GITHUB_REPO",
+            github_raw: "https://raw.githubusercontent.com/YOUR_GITHUB_REPO/master/audioroute.plugin.js"
         },
-        changeLog: {
-            fixed: {
-                "Context Menu": "Fixed context menu not showing up correctly."
+        changelog: [
+            {
+                title: "Initial Release",
+                items: ["Added basic functionality to add a 'Route Audio' context menu item."]
             }
-        }
+        ]
     };
 
-    if (!window.BDFDB_Global || (!window.BDFDB_Global.loaded && !window.BDFDB_Global.started)) {
-        return class {
-            getName() { return config.info.name; }
-            getAuthor() { return config.info.authors.map(a => a.name).join(", "); }
-            getVersion() { return config.info.version; }
-            getDescription() { return `The Library Plugin needed for ${config.info.name} is missing. Please install it.`; }
+    return !window.BDFDB_Global || (!window.BDFDB_Global.loaded && !window.BDFDB_Global.started) ? class {
+        constructor (meta) { for (let key in meta) this[key] = meta[key]; }
+        getName () { return this.name; }
+        getAuthor () { return this.author; }
+        getVersion () { return this.version; }
+        getDescription () { return `The Library Plugin needed for ${this.name} is missing. Open the Plugin Settings to download it. \n\n${this.description}`; }
 
-            load() {
-                window.BDFDB_Global = window.BDFDB_Global || {};
-                if (!window.BDFDB_Global.downloadModal) {
-                    window.BDFDB_Global.downloadModal = true;
-                    BdApi.showConfirmationModal("Library Missing",
-                        `The Library Plugin needed for ${this.getName()} is missing. Click "Download Now" to install it.`,
-                        {
-                            confirmText: "Download Now",
-                            onConfirm: () => {
-                                BdApi.showToast("Downloading the library...", {type: "info"});
-                                BdApi.Net.fetch("https://path/to/BDFDB/library.js")
-                                    .then(resp => resp.text())
-                                    .then(text => {
-                                        BdApi.saveData("BDFDB", "library", text);
-                                        BdApi.showToast("Library downloaded successfully", { type: "success" });
-                                        window.BDFDB_Global.downloadModal = false;
-                                    })
-                                    .catch(err => {
-                                        BdApi.showToast("Failed to download the library", { type: "error" });
-                                        console.error(err);
-                                        window.BDFDB_Global.downloadModal = false;
-                                    });
-                            },
-                            onCancel: () => {
-                                window.BDFDB_Global.downloadModal = false;
-                            }
-                        });
-                }
-            }
-        };
-    } else {
-        return (([Plugin, BDFDB]) => {
-            return class AudioRouter extends Plugin {
-                onLoad() {
-                    this.defaults = {
-                        general: {
-                            enableCustomRouting: { value: true, description: "Enable custom routing of user audio." }
-                        }
-                    };
-
-                    BDFDB.DataUtils.load(this, this.defaults);
-                }
-
-                onStart() {
-                    this.patchContextMenu();
-                }
-
-                onStop() {
-                    BDFDB.PluginUtils.clear(this);
-                }
-
-                getSettingsPanel() {
-                    return BDFDB.PluginUtils.createSettingsPanel(this, {
-                        items: [
-                            BDFDB.FormUtils.createSetting({
-                                name: "Enable Custom Routing",
-                                key: "enableCustomRouting",
-                                type: "switch",
-                                value: this.defaults.general.enableCustomRouting.value,
-                                onChange: value => { this.defaults.general.enableCustomRouting.value = value; }
-                            })
-                        ]
+        downloadLibrary () {
+            BdApi.showConfirmationModal("Library Missing", `The Library Plugin needed for ${this.name} is missing. Please click "Download Now" to install it.`, {
+                confirmText: "Download Now",
+                cancelText: "Cancel",
+                onConfirm: () => {
+                    require("request").get("https://mwittrien.github.io/BetterDiscordAddons/Library/0BDFDB.plugin.js", async (error, response, body) => {
+                        if (error) return BdApi.alert("Error", "Could not download BDFDB library plugin. Try again later or download it manually from the GitHub repository.");
+                        await new Promise(r => require("fs").writeFile(require("path").join(BdApi.Plugins.folder, "0BDFDB.plugin.js"), body, r));
+                        BdApi.Plugins.enable("0BDFDB");
                     });
                 }
+            });
+        }
 
-                patchContextMenu() {
-                    BDFDB.PatchUtils.patch(this, BDFDB.LibraryModules.ContextMenuUtils, "openContextMenu", { after: (that, args, value) => {
-                        console.log("ContextMenu patch triggered"); // Debug log to check if function is called
-                        const [event] = args;
-                        if (event.contextMenuType === "UserContextMenu") {
-                            console.log("Patching UserContextMenu"); // Additional debug log
-                            const menuItem = new BDFDB.LibraryComponents.MenuItems.MenuItem({
+        load () {
+            if (!window.BDFDB_Global || !Array.isArray(window.BDFDB_Global.pluginQueue)) window.BDFDB_Global = Object.assign({}, window.BDFDB_Global, {pluginQueue: []});
+            if (!window.BDFDB_Global.downloadModal) {
+                window.BDFDB_Global.downloadModal = true;
+                this.downloadLibrary();
+            }
+            if (!window.BDFDB_Global.pluginQueue.includes(this.name)) window.BDFDB_Global.pluginQueue.push(this.name);
+        }
+        start () { this.load(); }
+        stop () {}
+    } : (([Plugin, BDFDB]) => {
+        return class AudioRoute extends Plugin {
+            onStart () {
+                this.patchContextMenus();
+            }
+
+            onStop () {
+                BDFDB.PatchUtils.forceAllUpdates(this);
+            }
+
+            patchContextMenus () {
+                BDFDB.PatchUtils.patch(this, BDFDB.LibraryModules.ContextMenuUtils, "openContextMenu", {
+                    after: e => {
+                        const [contextMenu, contextArgs] = e.returnValue;
+                        const user = contextArgs[0]?.user;
+                        if (user) {
+                            const newItem = BDFDB.ContextMenuUtils.createItem(BDFDB.LibraryComponents.MenuItems.MenuItem, {
                                 label: "Route Audio",
-                                id: BDFDB.ContextMenuUtils.createItemId(this.name, "route-audio"),
+                                id: "route-audio",
                                 action: () => {
-                                    console.log("Route audio option clicked"); // Confirm action trigger
+                                    // Add your audio routing logic here
+                                    BdApi.alert("Route Audio", `Routing audio for ${user.username}`);
                                 }
                             });
-                            if (value && value.props && Array.isArray(value.props.children)) {
-                                value.props.children.push(BDFDB.ContextMenuUtils.createItem(BDFDB.LibraryComponents.MenuItems.MenuGroup, {
-                                    children: [menuItem]
-                                }));
-                                console.log("Menu item added"); // Debug log to confirm addition
-                            }
+                            contextMenu.props.children.push(BDFDB.ContextMenuUtils.createItem(BDFDB.LibraryComponents.MenuItems.MenuGroup, {
+                                children: [newItem]
+                            }));
                         }
-                    }});
-                }                
-            };
-        })(window.BDFDB_Global.PluginUtils.buildPlugin(config));
-    }
+                    }
+                });
+            }
+        };
+    })(window.BDFDB_Global.PluginUtils.buildPlugin(config));
 })();
